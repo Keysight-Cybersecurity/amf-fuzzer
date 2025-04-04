@@ -1,0 +1,46 @@
+[ Input ]
+
+# Choose between pcap and live.
+inputType = "pcap"
+
+# If inputType is pcap, indicate input files or directory(ies).
+inputFiles = ["fuzzer/data"]
+
+# If inputFile contains a directory, choose wether to follow subdirectories or not.
+# Choose between 'recursive' and 'static'
+inputTraversal = "recursive"
+
+
+[ Middleware ]
+
+# Choose between 'creation', 'mutation', 'afl' all of these still have to be implemented
+fuzzerEngine = "dumb"
+
+# If 'random', let the program choose a new pseudorandom seed each execution. Else, use pre-programmed seed.
+seed = "random"
+
+
+[ Filter ]
+
+# Choose between whitelist or blacklist
+filterType = "whitelist"
+
+# If there is no component on which to apply the filter (e.g. whitelist 'UE ID' but no 'UE ID' in packet), follow behavior on packet
+# Possible behaviors: 'fuzzThenSendPacket', 'sendPacket', 'blockPacket', 'raiseError' (stops program)
+filterOnFailBehavior = "blockPacket"
+
+    [Filter.apply]
+    UE-UID = "1000000000001"
+
+
+[ OutputLevel2 ] # This is for high-confidence errors
+# Choose between 'csv', 'json', or 'none' (no file output).
+outputTypeL2 = 'csv'
+outputFilenameL2 = 'outputL2.csv'
+
+
+
+[ OutputLevel1 ] # This is for medium-confidence errors (requires user opinion).
+# Choose between 'csv', 'json', or 'none' (no file output).
+outputTypeL1 = 'csv'
+outputFilenameL1 = 'outputL1.csv'
