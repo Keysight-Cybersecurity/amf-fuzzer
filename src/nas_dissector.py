@@ -3,6 +3,7 @@ from pycrate_mobile.NAS5G import *
 from binascii import unhexlify
 from typing import Iterator
 from time import time
+from filter_engines import PDU_Filter
 import pyshark, tomllib, os
 
 # ====================================================================================== #
@@ -11,23 +12,16 @@ import pyshark, tomllib, os
 #                                                                                        #
 # ====================================================================================== #
 
-CONFIG_FILE = "fuzzer/src/config.toml"
-
-# Filter type
-WHITELIST = 0
-BLACKLIST = 1
-
-# Default behavior
-FUZZ_THEN_SEND_PACKET = 0
-SEND_PACKET = 1
-BLOCK_PACKET = 2
-RAISE_ERROR = 3
+CONFIG_FILE = "src/config.toml"
 
 # ====================================================================================== #
 #                                                                                        #
-#                                       FUNCTIONS                                        #
+#                                       CLASSES                                          #
 #                                                                                        #
 # ====================================================================================== #
+
+def fuzz(): #Dummy function
+    pass
 
 class Timekeeper:
     def __init__(self):
@@ -42,36 +36,13 @@ class Timekeeper:
     def printTime(self):
         print(f'{round(time()-self.start_time,3)} s')
 
-class NAS_Filter():
 
 
-    def __init__(self, configuration):
-        self.filterType:int = None
-        self.filterOnFailBehavior:int = None
-        self.rules:dict[str] = None
-
-        filter_configuration = configuration["Filter"]
-        match filter_configuration["filterType"]:
-            case "whitelist":
-                self.filterType = WHITELIST
-            case "blacklist":
-                self.filterType = BLACKLIST
-            case _:
-                raise ValueError(f"Error: filter type {filter_configuration["filterType"]} not accepted.")
-        
-        match filter_configuration["filterOnFailBehavior"]:
-            case "fuzzThenSendPacket":
-                self.filterOnFailBehavior = FUZZ_THEN_SEND_PACKET
-            case "sendPacket":
-                self.filterOnFailBehavior = SEND_PACKET
-            case "blockPacket":
-                self.filterOnFailBehavior = BLOCK_PACKET
-            case "raiseError":
-                self.filterOnFailBehavior = RAISE_ERROR
-            case _:
-                raise ValueError(f"Error: filter on fail behavior parameter {filter_configuration["filterOnFailBehavior"]} not accepted.")
-
-        self.rules = filter_configuration["apply"]
+# ====================================================================================== #
+#                                                                                        #
+#                                       FUNCTIONS                                        #
+#                                                                                        #
+# ====================================================================================== #
 
 
 
@@ -89,7 +60,7 @@ def xorHexStrings(string_iter: Iterator[str]) -> str:
 # Returns absolute paths so that we can then use "set_val_at()" function to change the value we wanted.
 # In case multiple paths match, all of them will be returned.
 # This is NOT EFFICIENT (O(n*m)), but this is the only way to have a general function that can find this.
-def returnPathsFromEndpoint(paths: Iterator[any], endpoint:any) -> list[any]:
+def returnPathsFromEndpoint(paths: Iterator, endpoint) -> list:
     valid_paths:list[list] = []
     for path in paths:
         if endpoint in path[0]: # Actual path, path[1] is endpoint value. We could think about getting path[1] too if we wanted the value.
@@ -150,25 +121,27 @@ def initGetAllInputFiles(configuration)->set[str]:
 def main():
     ngap_pdu = NGAP.NGAP_PDU_Descriptions.NGAP_PDU
     configuration = getConfiguration()
-    filter = NAS_Filter(configuration)
-    files = initGetAllInputFiles(configuration)
+    filter = PDU_Filter(configuration, None)
+    file_paths = initGetAllInputFiles(configuration)
+
+    for file_path in file_paths:
 
     # We are using pyshark. Pyshark is simple to use but has very high overhead. We might want to change library in the future when we try to optimize.
-    capture_file = pyshark.FileCapture('data/amf_3_1.cap', display_filter="ngap", include_raw=True, use_ek=True, keep_packets=False)
+        capture_file = pyshark.FileCapture(file_path, display_filter=configuration["Middleware"]["protocol"], include_raw=True, use_ek=True, keep_packets=False)
 
-    for packet in capture_file:
-        # The ngap_raw object doesn't seem to have a 'value' attribute. Raw data is seemingly stored in _fields_dict
-        # We have also the problem that the packets are paresed twice: once by pyshark and another time by pycrate.
-        unhexlified_string = unhexlify(packet.ngap_raw._fields_dict)
-        ngap_pdu.from_aper(unhexlified_string)
+        for packet in capture_file:
+            # The ngap_raw object doesn't seem to have a 'value' attribute. Raw data is seemingly stored in _fields_dict
+            # We have also the problem that the packets are paresed twice: once by pyshark and another time by pycrate.
+            unhexlified_string = unhexlify(packet.ngap_raw._fields_dict)
+            ngap_pdu.from_aper(unhexlified_string)
 
-        raw_original_message:bytes = getNASmessage(ngap_pdu)
-        if raw_original_message is not None:
-            original_message, err = parse_NAS5G(raw_original_message)
-            assert not err
-            print(original_message.show())
-        else:
-            print("No NAS message.")
+            raw_original_message:bytes = getNASmessage(ngap_pdu)
+            if raw_original_message is not None:
+                original_message, err = parse_NAS5G(raw_original_message)
+                assert not err
+                print(original_message.show())
+            else:
+                print("No NAS message.")
 
 
 main()
