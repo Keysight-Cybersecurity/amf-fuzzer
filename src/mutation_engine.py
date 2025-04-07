@@ -25,7 +25,10 @@ class FuzzerEngine():
         return child_packet
 
 
-class RandomMutationEngine():
+class RandomMutationEngine(FuzzerEngine):
     def __init__(self):
+        pass
+
+    def fuzz_packet(self, packet:Packet)->Packet:
         pass
 

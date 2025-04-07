@@ -4,6 +4,7 @@ from binascii import unhexlify
 from typing import Iterator
 from time import time
 from filter_engines import PDU_Filter
+from mutation_engine import *
 import pyshark, tomllib, os
 
 # ====================================================================================== #
@@ -121,7 +122,8 @@ def initGetAllInputFiles(configuration)->set[str]:
 def main():
     ngap_pdu = NGAP.NGAP_PDU_Descriptions.NGAP_PDU
     configuration = getConfiguration()
-    filter = PDU_Filter(configuration, None)
+    fuzzing_engine = RandomMutationEngine()
+    filter = PDU_Filter(configuration, fuzzing_engine)
     file_paths = initGetAllInputFiles(configuration)
 
     for file_path in file_paths:
@@ -134,6 +136,8 @@ def main():
             # We have also the problem that the packets are paresed twice: once by pyshark and another time by pycrate.
             unhexlified_string = unhexlify(packet.ngap_raw._fields_dict)
             ngap_pdu.from_aper(unhexlified_string)
+
+            filter.apply_filter(ngap_pdu)
 
             raw_original_message:bytes = getNASmessage(ngap_pdu)
             if raw_original_message is not None:

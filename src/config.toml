@@ -4,11 +4,14 @@
 inputType = "pcap"
 
 # If inputType is pcap, indicate input files or directory(ies).
-inputFiles = ["ignore-directory/data"]
+inputFiles = ["ignore-directory/data/AMF_3_1.cap"]
 
 # If inputFile contains a directory, choose wether to follow subdirectories or not.
 # Choose between 'recursive' and 'static'
 inputTraversal = "recursive"
+
+
+# ==================================================================================================== #
 
 
 [ Middleware ]
@@ -22,23 +25,32 @@ fuzzerEngine = "dumb"
 # If 'random', let the program choose a new pseudorandom seed each execution. Else, use pre-programmed seed.
 seed = "random"
 
+# Choose which fields to fuzz (csv format). If left empty, will fuzz all fields.
+fields = "field1, field2"
+
+
+# ==================================================================================================== #
+
 
 [ Filter ]
 
-# Choose between whitelist or blacklist
-filterType = "whitelist"
-
-
 # Possible behaviors: 'fuzz', 'send', 'block', 'raiseError' (stops program)
-ruleSatisfiedBehaviour = "fuzz"
+ruleSatisfiedBehaviour = "send"
 
 # If rule is not satisfied, follow behavior on packet
 # Possible behaviors: 'fuzz', 'send', 'block', 'raiseError' (stops program)
-defaultBehaviour = "fuzz"
+defaultBehaviour = "send"
 
-    # Apply filter on packets that satisfy key-value comparison
+    # Apply filter on packets that satisfy expression
     [Filter.apply]
     UE-UID = "1000000000001"
+    anotherrandomfilter = "filter"
+
+    [Filter.logic] # Do not & and | logical characters as these are deemed unsafe and will be caught.
+    expression = "UE-UID and (anotherrandomfilter or True)"
+
+
+# ==================================================================================================== #
 
 
 [ OutputLevel2 ] # This is for high-confidence errors
@@ -46,6 +58,8 @@ defaultBehaviour = "fuzz"
 outputTypeL2 = 'csv'
 outputFilenameL2 = 'outputL2.csv'
 
+
+# ==================================================================================================== #
 
 
 [ OutputLevel1 ] # This is for medium-confidence errors (requires user opinion).

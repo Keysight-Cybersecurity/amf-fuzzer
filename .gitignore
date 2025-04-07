@@ -1,3 +1,4 @@
 ignore-directory
 env
+sandbox.py
 *.cpython*
