@@ -19,7 +19,7 @@ inputTraversal = "recursive"
 # Choose between 'ngap' or 'nas'
 protocol = "ngap"
 
-# Choose between 'creation', 'mutation', 'afl' all of these still have to be implemented
+# Choose between 'dumb', 'mutation', 'afl' all of these still have to be implemented
 fuzzerEngine = "dumb"
 
 # If 'random', let the program choose a new pseudorandom seed each execution. Else, use pre-programmed seed.
@@ -43,20 +43,24 @@ defaultBehaviour = "send"
 
     # Apply filter on packets that satisfy expression
     [Filter.apply]
-    UE-UID = "1000000000001"
-    anotherrandomfilter = "filter"
+    gNB-ID = '(78, 22)'
+    procedureCode = 21
 
-    [Filter.logic] # Do not & and | logical characters as these are deemed unsafe and will be caught.
-    expression = "UE-UID and (anotherrandomfilter or True)"
+    [Filter.logic] 
+    expression = "gNB-ID and procedureCode"
 
+
+[ Logging ]
+directory = "logs"
 
 # ==================================================================================================== #
 
 
 [ OutputLevel2 ] # This is for high-confidence errors
 # Choose between 'csv', 'json', or 'none' (no file output).
-outputTypeL2 = 'csv'
-outputFilenameL2 = 'outputL2.csv'
+outputType = 'csv'
+outputFilename = 'outputL2.csv'
+directory = "outputs"
 
 
 # ==================================================================================================== #
@@ -64,5 +68,6 @@ outputFilenameL2 = 'outputL2.csv'
 
 [ OutputLevel1 ] # This is for medium-confidence errors (requires user opinion).
 # Choose between 'csv', 'json', or 'none' (no file output).
-outputTypeL1 = 'csv'
-outputFilenameL1 = 'outputL1.csv'
+outputType = 'csv'
+outputFilename = 'outputL1.csv'
+directory = "outputs"

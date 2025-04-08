@@ -1,4 +1,7 @@
 ignore-directory
 env
 sandbox.py
+logs
+outputs
+__pycache__
 *.cpython*
