@@ -16,8 +16,8 @@ inputTraversal = "recursive"
 
 [ Middleware ]
 
-# Choose between 'ngap' or 'nas'
-protocol = "ngap"
+# Choose between 'ngap' or 'nas-5gs'
+protocol = "nas-5gs"
 
 # Choose between 'dumb', 'mutation', 'afl' all of these still have to be implemented
 fuzzerEngine = "dumb"

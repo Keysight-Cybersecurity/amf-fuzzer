@@ -1,5 +1,3 @@
-from abc import abstractmethod
-
 # Logging
 import logging
 logger = logging.getLogger(__name__)
@@ -17,9 +15,7 @@ class Packet():
     
 
 class FuzzerEngine():
-    @property
 
-    @abstractmethod
     def fuzz_packet(self, packet:Packet)->Packet:
         pass
 

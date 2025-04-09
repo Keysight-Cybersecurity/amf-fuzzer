@@ -95,6 +95,8 @@ def compute_md5(data):
 
 
 # Relies on Pycrates' implementation of paths.
+# This filter 
+# Filter effect is based on "rule for packet management" constants in constants.py
 class PDU_Filter():
 
     def __init__(self, configuration):
@@ -163,6 +165,9 @@ class PDU_Filter():
                 raise ValueError(f"Error: filter on rule satisfied behaviour parameter {filter_configuration["ruleSatisfiedBehaviour"]} not accepted.")
 
     
+    # Watch out, this will check if rule_key is in the path name AND the endpoint value of the path has a value corresponding to rule_value
+    # This means that if path = 'word1, word2, word3, word4' -> value, and rule_key = word2 and rule_value = value, then the function will output TRUE.
+    # TODO We may later want to change that so it is only valid for rule_key = word4 and rule_value = value 
     def __is_rule_element_satisfied(self, pdu_paths, rule_key, rule_value):
         for path in pdu_paths:
             if rule_key in path[0] and str(rule_value)==str(path[1]):
@@ -193,7 +198,7 @@ class PDU_Filter():
                 string_to_evaluate = rule_key.replace("-","_")+"="+rule_satisfied_result
                 exec(string_to_evaluate)
 
-            try: #TODO: do it cleanly ! To avoid users from editing global/local variables, we may need to associate them with tokens.
+            try: #DONE: do it cleanly ! To avoid users from editing global/local variables, we may need to associate them with tokens.
                 output = eval(self.filter_expression.replace("-","_"))
             except ParseException as e:
                 print(e)
