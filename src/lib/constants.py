@@ -18,3 +18,7 @@ UNSECURE_CHARACTERS_EXPRESSION = set('!@#$%^|&*+{}:"<>?[];\'\\\",./`~')
 # References for protocol
 NGAP_PROTOCOL = 0
 NAS5G_PROTOCOL = 1
+
+# Parameters for fuzzing engine
+MAX_QUEUE_SIZE = 32
+MAX_CORE_AMOUNT = 8

@@ -19,6 +19,7 @@ import pyshark #pyshark
 from lib.filter_engines import *
 from lib.fuzzing_engine import *
 from lib.functions import *
+from lib.constants import *
 
 # Logging
 import logging
@@ -30,16 +31,6 @@ logger = logging.getLogger(__name__)
 #                                     FUNCTIONS                                          #
 #                                                                                        #
 # ====================================================================================== #
-
-def flatten_nas5g_tree_recursive_envelope_traversal(envelope:pycrate_core.elt.Envelope)->list[str]:
-    paths:list = []
-    for next_item in envelope._content:
-        next_item:pycrate_core.elt.Element
-        if next_item.CLASS == 'Atom':
-            paths.append((next_item.fullname().replace(".",", "), next_item._val))
-        elif next_item.CLASS == 'Envelope':
-            paths+=flatten_nas5g_tree_recursive_envelope_traversal(next_item)
-    return paths
 
 
 def unhexlified_packet_to_endpoint_paths(data_container, protocol_type, packet):
@@ -62,7 +53,7 @@ def unhexlified_packet_to_endpoint_paths(data_container, protocol_type, packet):
                 if raw_original_message is not None:
                     original_message, err = parse_NAS5G(raw_original_message)
                     assert not err
-                    return flatten_nas5g_tree_recursive_envelope_traversal(original_message)
+                    return flattenNas5GTreeRecursiveEnvelopeTraversal(original_message)
                 else:
                     print("No NAS message.")
                     logger.warning("No NAS message in NGAP packet while in NAS branch, check functionality of pyshark brancher.")
@@ -99,16 +90,16 @@ def main():
         exit(1) #TODO: Manage
 
     # Establish a profile depending on protocol to parse.
-    fuzzer_engine:FuzzerEngine
-    match configuration["Middleware"]["fuzzerEngine"]:
+    fuzzer_engine:FuzzerEngine = FuzzerEngine(configuration)
+    match configuration["Middleware"]["Fuzzer"]["fuzzerEngine"]:
         case "dumb":
-            logger.info(f"{configuration["Middleware"]["fuzzerEngine"]} Still not implemented.")
+            logger.info(f"{configuration["Middleware"]["Fuzzer"]["fuzzerEngine"]} Still not implemented.")
             pass
         case "mutation":
-            logger.info(f"{configuration["Middleware"]["fuzzerEngine"]} Still not implemented.")
+            logger.info(f"{configuration["Middleware"]["Fuzzer"]["fuzzerEngine"]} Still not implemented.")
             pass
         case "afl":
-            logger.info(f"{configuration["Middleware"]["fuzzerEngine"]} Still not implemented.")
+            logger.info(f"{configuration["Middleware"]["Fuzzer"]["fuzzerEngine"]} Still not implemented.")
             pass
     
 
@@ -123,6 +114,22 @@ def main():
                 for packet in capture_file:
                     endpoint_paths = unhexlified_packet_to_endpoint_paths(data_container, str_protocol_name, packet)
                     behaviour_indicator = protocol_filter.get_behaviour(endpoint_paths) # Goes nowhere for now
+
+                    if behaviour_indicator == FUZZ_THEN_SEND_PACKET:
+                        packet:Packet = Packet(pdu=data_container)
+                        fuzzer_engine.assignPacketFields(packet)
+                    elif behaviour_indicator == SEND_PACKET:
+                        print(behaviour_indicator)
+                    elif behaviour_indicator == BLOCK_PACKET:
+                        break
+                    elif behaviour_indicator == RAISE_ERROR:
+                        logger.error("Pattern matching requested for an exception to be raised.", exc_info=True)
+                        raise Exception("Pattern matching requested error raised.")
+                    else:
+                        logger.error(f"Behaviour indicator n°{behaviour_indicator} does not exist", exc_info=True)
+                        raise ValueError(f"Behaviour indicator n°{behaviour_indicator} does not exist.")
+
+                    
 
         case "live":
             logger.info(f" {configuration["Input"]["inputType"]} is still not implemented.")

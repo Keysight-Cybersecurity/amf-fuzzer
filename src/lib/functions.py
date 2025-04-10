@@ -2,6 +2,11 @@ from typing import Iterator
 from lib.constants import *
 import tomllib, os.path
 
+# Imports from downloaded libraries
+from pycrate_asn1dir import NGAP # pycrate
+from pycrate_mobile.NAS5G import * # pycrate
+import pycrate_core.elt
+
 # Logging
 import logging
 logger = logging.getLogger(__name__)
@@ -30,7 +35,7 @@ def returnPathsFromEndpoint(paths: Iterator, endpoint) -> list:
     
     return valid_paths
 
-def getNASmessage(pdu):
+def getNASmessage(pdu:pycrate_core.elt.Element):
     output = None
     paths = returnPathsFromEndpoint(pdu.get_val_paths(),"NAS-PDU")
     if len(paths)!=0:
@@ -68,12 +73,25 @@ def getAllInputFiles(path_list:list[str], flag_recursive_search:bool)->set[str]:
         raise e
     return output
 
+
+
 def initGetAllInputFiles(configuration)->set[str]:
     output:set[str] = set()
     flag_recursive_search = (configuration["Input"]["inputTraversal"]=="recursive")
     if configuration["Input"]["inputType"]=="pcap":
         output = getAllInputFiles(configuration["Input"]["inputFiles"], flag_recursive_search)
     return output
+
+
+def flattenNas5GTreeRecursiveEnvelopeTraversal(envelope:pycrate_core.elt.Envelope)->list[str]:
+    paths:list = []
+    for next_item in envelope._content:
+        next_item:pycrate_core.elt.Element
+        if next_item.CLASS == 'Atom':
+            paths.append((next_item.fullname().split("."), next_item._val))
+        elif next_item.CLASS == 'Envelope':
+            paths+=flattenNas5GTreeRecursiveEnvelopeTraversal(next_item)
+    return paths
 
 
 

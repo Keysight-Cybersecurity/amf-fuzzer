@@ -17,16 +17,29 @@ inputTraversal = "recursive"
 [ Middleware ]
 
 # Choose between 'ngap' or 'nas-5gs'
-protocol = "nas-5gs"
+protocol = "ngap"
 
-# Choose between 'dumb', 'mutation', 'afl' all of these still have to be implemented
-fuzzerEngine = "dumb"
+    [ Middleware.Fuzzer ]
+    # Choose between 'dumb', 'mutation', 'afl' all of these still have to be implemented
+    fuzzerEngine = "dumb"
 
-# If 'random', let the program choose a new pseudorandom seed each execution. Else, use pre-programmed seed.
-seed = "random"
+    # Seed for randomness of fuzzing engines.
+    seed = 0
 
-# Choose which fields to fuzz (csv format). If left empty, will fuzz all fields.
-fields = "field1, field2"
+    # Choose which fields to fuzz (csv format). If left empty, will fuzz all fields.
+    fields = "gNB-ID, procedureCode"
+
+    # What to do if none of the fields were found.
+    defaultBehavior = "fuzzwholepacket"
+
+    [ Middleware.Multiprocessing ]
+
+    # Maximum amount of packets kept in memory for fuzzing (maximum is 256).
+    queueSize = 16
+
+    # Amount of processor threads that will be used for fuzzing (too high a number may render the system instable).
+    coreAmount = 8
+
 
 
 # ==================================================================================================== #
@@ -35,11 +48,11 @@ fields = "field1, field2"
 [ Filter ]
 
 # Possible behaviors: 'fuzz', 'send', 'block', 'raiseError' (stops program)
-ruleSatisfiedBehaviour = "send"
+ruleSatisfiedBehaviour = "fuzz"
 
 # If rule is not satisfied, follow behavior on packet
 # Possible behaviors: 'fuzz', 'send', 'block', 'raiseError' (stops program)
-defaultBehaviour = "send"
+defaultBehaviour = "block"
 
     # Apply filter on packets that satisfy expression
     [Filter.apply]
