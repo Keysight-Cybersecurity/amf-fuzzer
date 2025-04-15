@@ -23,22 +23,26 @@ protocol = "ngap"
     # Choose between 'dumb', 'mutation', 'afl' all of these still have to be implemented
     fuzzerEngine = "dumb"
 
-    # Seed for randomness of fuzzing engines.
+    # Seed for randomness of fuzzing engines. Only int are accepted.
     seed = 0
 
     # Choose which fields to fuzz (csv format). If left empty, will fuzz all fields.
-    fields = "gNB-ID, procedureCode"
+    fields = "gNB-ID, procedureCode" #NGAP
+    #fields = "UEContextRequest" # NAS-5G
 
     # What to do if none of the fields were found.
     defaultBehavior = "fuzzwholepacket"
 
+    # As a float, how many randomly chosen bits should be toggled in dumb mode
+    bitToggleRate = 0.20
+
     [ Middleware.Multiprocessing ]
 
     # Maximum amount of packets kept in memory for fuzzing (maximum is 256).
-    queueSize = 16
+    queueSize = 64
 
     # Amount of processor threads that will be used for fuzzing (too high a number may render the system instable).
-    coreAmount = 8
+    coreAmount = 4
 
 
 
@@ -46,6 +50,8 @@ protocol = "ngap"
 
 
 [ Filter ]
+
+protocol = "ngap"
 
 # Possible behaviors: 'fuzz', 'send', 'block', 'raiseError' (stops program)
 ruleSatisfiedBehaviour = "fuzz"
@@ -56,11 +62,13 @@ defaultBehaviour = "block"
 
     # Apply filter on packets that satisfy expression
     [Filter.apply]
-    gNB-ID = '(78, 22)'
-    procedureCode = 21
+    # gNB-ID = '(78, 22)' # NGAP
+    # procedureCode = 21 # NGAP
+    RAN-UE-NGAP-ID = 0 # NAS
 
     [Filter.logic] 
-    expression = "gNB-ID and procedureCode"
+    #expression = "gNB-ID and procedureCode" # NGAP
+    expression = "True"
 
 
 [ Logging ]

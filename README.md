@@ -30,9 +30,9 @@ This training AI will have for objective to protect the function from perceived 
 - [X] Manage to extract data in a smart way from pcap files.
 - [ ] Manage to extract data from live packets.
 - [X] Implement a filter for PDUs.
-- [ ] Implement a way to reliably select packet fields to fuzz.
-- [ ] Implement at least one fuzzing engine.
-- [ ] Implement a dumb fuzzing engine.
+- [X] Implement a way to reliably select packet fields to fuzz.
+- [X] Implement at least one fuzzing engine.
+- [X] Implement a dumb fuzzing engine.
 - [ ] Find a way to implement reliable error recognition from AMF (AI or another parser ?)
 - [ ] Implement packet-to-response association for smart fuzzing.
 - [ ] Implement a smart mutation fuzzing engine.
