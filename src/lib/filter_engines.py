@@ -102,7 +102,6 @@ class PDU_Filter():
     def __init__(self, configuration):
         
         # Default filter values.
-        self.filterType:int = None
         self.filterOnFailBehaviour:int = None
         self.filterRuleSatisfiedBehaviour:int = None
         self.filter_rules:dict[str] = None
@@ -184,6 +183,7 @@ class PDU_Filter():
                 rule_satisfied_result = str(self.__is_rule_element_satisfied(paths, rule_key, rule_value))
                 string_to_evaluate = self.__hashed_dictionnary[rule_key]+"="+rule_satisfied_result
                 exec(string_to_evaluate) # var_token = True/False, users won't be able to control variable re-assignment.
+                # Instead of the varialbe being GLOBAL_PROTECT_MEMORY, it's going to be var_+md5hash(GLOBAL_PROTECT_NAME+salt)
             try:
                 # Users may be able to execute commands, even with all useful characters disabled.
                 # TODO: create a parser with a grammar for simple boolean expressions.

@@ -7,6 +7,7 @@ from binascii import unhexlify
 # Imports from downloaded libraries
 from pycrate_asn1dir import NGAP # pycrate
 from pycrate_mobile.NAS5G import * # pycrate
+from pycrate_asn1rt.utils import get_obj_at
 import pycrate_core.elt
 
 # Import from local lib
@@ -17,9 +18,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# ====================================================================================== #
+#                                                                                        #
+#                                    FUNCTIONS                                           #
+#                                                                                        #
+# ====================================================================================== #
+
 
 def xorHexStrings(string_iter: Iterator[str]) -> str:
     """ 
+    WARNING : Is not reliable with very long strings (integer behaviour becomes weird at very high values)
     Returns the result of the xor operation over all hexadecimal strings in string_iter.
     Do note that the leading zeros will be stripped. An iterator with a single element will return this element.
 
@@ -40,6 +48,7 @@ def xorHexStrings(string_iter: Iterator[str]) -> str:
             if string[:2].lower() == "0x":
                 string=string[2:]
             max_len = max(max_len,len(string))
+
             xored_output ^= int(string, 16)
         except ValueError as e :
             logger.error (f"functions.py > xorHexStrings : string {string} cannot be interpreted as hexadecimal.")
@@ -47,7 +56,6 @@ def xorHexStrings(string_iter: Iterator[str]) -> str:
     output_string = hex(xored_output)[2:]
     output_string = "0"*(max_len-len(output_string))+output_string # Add leading zeros.
     return output_string
-
 
 # Returns absolute paths so that we can then use "set_val_at()" function to change the value we wanted.
 # In case multiple paths match, all of them will be returned.
@@ -81,15 +89,29 @@ def getNASmessage(pdu:pycrate_core.elt.Element):
     Args:
         pdu: the Protocol Description Unit of the NGAP message we want to extract the NAS message from.
     Returns:
-        output: None if no NAS message present. Else, output the NAS message as a binary string.
+        output: None if no NAS message present. Else, output the NAS message element of NGAP as an ASN1 ATOM.
     """
     output = None
     paths = returnPathsFromEndpoint(pdu.get_val_paths(),"NAS-PDU")
     if len(paths)!=0:
-        output = pdu.get_val_at(paths[0])
+        #output = pdu.get_val_at(paths[0])
+        output = get_obj_at(pdu, paths[0])
     return output
 
-
+def getNASmessageLocation(pdu:pycrate_core.elt.Element):
+    """
+    Extract the NAS message from a NGAP message.
+    Args:
+        pdu: the Protocol Description Unit of the NGAP message we want to extract the NAS message from.
+    Returns:
+        output: None if no NAS message present. Else, output the NAS message element of NGAP as an ASN1 ATOM.
+    """
+    output = None
+    paths = returnPathsFromEndpoint(pdu.get_val_paths(),"NAS-PDU")
+    if len(paths)!=0:
+        return paths[0]
+    else:
+        return None
 
 
 def getConfiguration():
@@ -168,6 +190,10 @@ def getPathsFromNAS5G(element:pycrate_core.elt.Envelope)->list[str]:
             for next_item in element._content:
                 next_item:pycrate_core.elt.Element
                 if next_item.CLASS == 'Atom':
+                    if next_item._val == None and next_item._trans:
+                        logger.info(f"getPathsFromNAS5G > Element {next_item._name} is transparent and has no value. It will not be added to paths.")
+                    else:
+                        paths.append((next_item.fullname().split("."), next_item._val))
                     paths.append((next_item.fullname().split("."), next_item._val))
                 elif next_item.CLASS in ['Envelope', 'Alt']:
                     paths+=getPathsFromNAS5G(next_item)
@@ -216,7 +242,7 @@ def unifiedPathFinder(data_container:NGAP.NGAP_PDU_Descriptions, protocol_type:s
             try:
                 unhexlified_string = unhexlify(packet.ngap_raw._fields_dict)
                 data_container.from_aper(unhexlified_string)
-                raw_original_message:bytes = getNASmessage(data_container)
+                raw_original_message:bytes = getNASmessage(data_container)._val
                 if raw_original_message is not None:
                     original_message, err = parse_NAS5G(raw_original_message)
                     assert not err
@@ -229,3 +255,49 @@ def unifiedPathFinder(data_container:NGAP.NGAP_PDU_Descriptions, protocol_type:s
         case _:
             logger.error("No function to retrieve paths of endpoints from filter_input.")
     return None
+
+
+
+def getObjAt5GMM(pdu, path):
+    current_element = pdu
+    path_depth = 1
+    assert current_element._name == path[0]," getObjAt5GMM: First element of path is not root, aborting."
+    while path_depth < len(path) and current_element.CLASS!="ATOM":
+        i=0
+        while current_element._by_name[i] != path[path_depth] and i < len(current_element._by_name):
+            i+=1
+        if i >= len(current_element._by_name):
+            logger.name(f"Path {path} does not match actual item. Aborting.")
+            raise Exception(f"Path {path} doesn't match actual item. Aborting")
+        current_element = current_element._content[i]
+        path_depth+=1
+    return current_element
+
+
+
+def printBeautifiedHexString(hex_string):
+    hex_string_length = len(hex_string)
+    amount_of_bytes_per_line = 16
+    amount_of_hex_chars_per_line = amount_of_bytes_per_line*2
+    amount_of_lines = hex_string_length//amount_of_hex_chars_per_line # Because two hex chars amount to one byte
+    amount_of_hex_chars_remaining = hex_string_length%amount_of_hex_chars_per_line
+    if amount_of_hex_chars_remaining>0:
+        amount_of_lines+=1
+    
+    for line_index in range(amount_of_lines):
+        line_index_string = hex(line_index)[2:]
+        line_buffer = "0"*(3-len(line_index_string))+line_index_string+"0: "
+
+        for byte_index in range(amount_of_bytes_per_line):
+            if byte_index == (amount_of_bytes_per_line//2):
+                line_buffer += " " 
+            line_buffer += hex_string[
+                line_index*amount_of_hex_chars_per_line+byte_index*2:
+                line_index*amount_of_hex_chars_per_line+(byte_index+1)*2
+                ] + " "
+        
+        print(line_buffer)
+
+
+def hamming_weight(hex_input:str):
+    return bin(int(hex_input,16)).count('1')

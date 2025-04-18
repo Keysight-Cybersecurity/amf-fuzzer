@@ -1,3 +1,6 @@
+# Debugging
+FLAG_DEBUGGING = True
+
 # Configuration file path
 CONFIG_FILE = "src/config.toml"
 

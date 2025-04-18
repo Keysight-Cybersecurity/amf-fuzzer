@@ -11,8 +11,6 @@ from pycrate_asn1rt.utils import get_obj_at
 # Local libraries
 from lib.constants import *
 from lib.functions import *
-#from lib.multi_fuzzing import *
-
 
 # Logging
 import logging
@@ -28,6 +26,11 @@ hw_hexvalues = { # Key is length of data in bits. Index x of associated list giv
     1:["0","1"]
 }
 
+# ====================================================================================== #
+#                                                                                        #
+#                                 PACKET CLASS                                           #
+#                                                                                        #
+# ====================================================================================== #
 
 class Packet():
     # Configuration should be none only on child creation.
@@ -50,6 +53,12 @@ class Packet():
         if configuration is not None:
             self.__assignFieldsLocation(configuration)
 
+    def __eq__(self, other):
+        if isinstance(other, Packet):
+            return self.data == other.data
+        return False
+
+
 
     def __assignFieldsLocation(self, configuration):
         """
@@ -61,7 +70,7 @@ class Packet():
 
         """
         locations = []
-        fields_to_fuzz:list[str] = configuration["Middleware"]["Fuzzer"]["fields"].replace(" ","").split(",")
+        fields_to_fuzz:list[str] = configuration["Middleware"]["Fuzzer"]["fields"]
         if self.pdu != None and self.fuzzedFieldsLocation == None:
             
             # TOO MUCH INDENTATION ! TODO Get rid of this horror
@@ -84,6 +93,8 @@ class Packet():
                     #logger.warning(f"Path {path} wasn't found.")
             
             self.fuzzedFieldsLocation=locations if locations != [] else None
+            if FLAG_DEBUGGING:
+                self.fuzzedFieldsLocation = paths # To remove at one point TODO
 
     def createChild(self):
         childPacket = Packet(self.data, self.pdu)
@@ -97,30 +108,45 @@ class Packet():
         return childPacket
     
 
-    
 
-
-
-
-
+# ====================================================================================== #
+#                                                                                        #
+#                                   FUZZING ENGINE CLASS                                 #
+#                                                                                        #
+# ====================================================================================== #
 
 class FuzzerEngine(multiprocessing.Process):
     # If engineManager is not defined, assume single-thread.
     def __init__(self, configuration, engineManager=None, seed_addition=0):
         multiprocessing.Process.__init__(self)
-        self.engineManager = engineManager
-        seed = configuration["Middleware"]["Fuzzer"]["seed"]
+        self.engineManager = engineManager # May need to be set as argument of run for multiprocessing.
+        self.seed = configuration["Middleware"]["Fuzzer"]["seed"]
+        
+        # Generate a random seed. We could set it to None, but if we do this then we
+        # don't know which state the pseudorandom generator is set to, which would
+        # stop us from reproducing interesting behaviours.
+        if self.seed == 0:
+            self.seed = int.from_bytes(os.urandom(12))
+        else:
+            self.seed = self.seed + seed_addition
 
         # TODO proper input management.
-        self.fieldsToFuzz:str = configuration["Middleware"]["Fuzzer"]["fields"].replace(" ", "").split(",")
+        # Changed from comma-separated string to list of strings.
+        self.fieldsToFuzz:str = configuration["Middleware"]["Fuzzer"]["fields"]
+        # If we want to make the fuzzing engine multi-process compatible, then we need multiple independent random number generators.
+        # The default random generator uses Marcenne's twister, which has good apparent randomness but is deterministic
         self.randomGenerator = random.Random()
-        self.randomGenerator.seed(None if seed == 0 else seed+seed_addition)
+        self.randomGenerator.seed(self.seed)
+
         self.defaultBehavior = configuration["Middleware"]["Fuzzer"]["defaultBehavior"]
         self.protocol = configuration["Middleware"]["protocol"]
         self.bitToggleRate = configuration["Middleware"]["Fuzzer"]["bitToggleRate"]
-        self.id = seed_addition
-        logger.info(f"Engine nr {self.id} has been created at {datetime.now()}")
 
+        self.id = seed_addition # Hacky but it works. Will be used later for multiprocessing.
+        logger.info(f"Engine nr {self.id} with seed {self.seed} has been created at {datetime.now()}")
+
+    # Doesn't run yet. Issue comes from weak referenced elements in the class.
+    # A fork will be created specifically to work on multiprocessing.
     def run(self):
         logger = logging.getLogger(__name__)
         fuzzing_queue:multiprocessing.Queue = self.engineManager.fuzzingQueue
@@ -176,17 +202,18 @@ class DumbFuzzingEngine(FuzzerEngine):
                 elements_to_fuzz = [get_obj_at(fuzzed_packet.pdu,element_location[0]) for element_location in fuzzed_packet.pdu.get_val_paths()]
                 # Fuzz here
                 for element in elements_to_fuzz:
-
+                    
+                    print("New element")
                     try:
-                        match element.TYPE:
+                        match element.TYPE: # This is ASN1 types
                             case "INTEGER":
-                                element.set_val(self.__fuzzIntegers(element))
+                                element.set_val(self.__fuzzIntegersNGAP(element))
                             case "BIT STRING":
-                                element.set_val(self.__fuzzBitString(element))
+                                element.set_val(self.__fuzzBitStringNGAP(element))
                             case "ENUMERATED":
-                                element.set_val(self.__fuzzEnumerated(element))
+                                element.set_val(self.__fuzzEnumeratedNGAP(element))
                             case "OCTET STRING":
-                                element.set_val(self.__fuzzOctetString(element))
+                                element.set_val(self.__fuzzOctetStringNGAP(element))
                             case "PrintableString":
                                 logger.info(f"Element PrintableString with value {element._val} should have been fuzzed, but has not been due to implementation limits.")
                                 pass # No idea what to do with this one.
@@ -196,7 +223,7 @@ class DumbFuzzingEngine(FuzzerEngine):
                     except Exception as e:
                         logger.error(e)
                         raise e
-                print("")
+                
             
             # Use raw data. It's easier.
             elif self.defaultBehavior == "fuzzwholepacket":
@@ -210,9 +237,17 @@ class DumbFuzzingEngine(FuzzerEngine):
             # End of fuzzing
         elif fuzzed_packet.protocol == "nas-5gs":
             assert fuzzed_packet.pdu is not None
-            if fuzzed_packet.fuzzedFieldsLocation is not None:
+            if fuzzed_packet.fuzzedFieldsLocation is not None: # This is 5GMM structure.
+                for location in fuzzed_packet.fuzzedFieldsLocation:
+                    element = getObjAt5GMM(fuzzed_packet.pdu, location[0])
 
-                print("")
+                    if int in element.TYPES:
+                        element.set_val(self.__fuzzIntegersNAS5G(element))
+                    elif bytes in element.TYPES:
+                        element.set_val(self.__fuzzBytesNAS5G(element))
+                    else:
+                        logger.error(f"fuzzing_engine.py > DumbFuzzingEngine > fuzzPacket : element type {element.TYPES} is not managed.")
+                        raise TypeError(f"fuzzing_engine.py > DumbFuzzingEngine > fuzzPacket : element type {element.TYPES} is not managed.")
 
             elif self.defaultBehavior == "fuzzwholepacket":
                 fuzzed_packet.data = self.__fuzzRawData(fuzzed_packet.data)
@@ -227,6 +262,10 @@ class DumbFuzzingEngine(FuzzerEngine):
 
         return fuzzed_packet
     
+
+
+    
+    
     def __fuzzRawData(self, data:str)->str:
         hex_length = len(data)
         mask = ""
@@ -234,7 +273,41 @@ class DumbFuzzingEngine(FuzzerEngine):
             mask = mask+self.randomGenerator.choice(hw_hexvalues[4][self.randomGenerator.binomialvariate(4,self.bitToggleRate)])
         return xorHexStrings([data,mask])
     
-    def __fuzzIntegers(self, element) -> int:
+
+    def __fuzzIntegersNAS5G(self, element) -> int:
+        if element._val == None:
+            logger.info(f"Element {element._name} is of type int but has value of type {type(element._val)}. Ignoring.")
+            return element._val
+        int_value = element._val
+        lb = element._get_val_min()
+        ub = element._get_val_max()
+        bits = element._bl
+        mask = ""
+        while bits >= 4:
+            hex_value_choices = hw_hexvalues[4][self.randomGenerator.binomialvariate(4,self.bitToggleRate)]
+            mask += self.randomGenerator.choice(hex_value_choices)
+            bits-=4
+        if bits > 0:
+            hex_value_choices = hw_hexvalues[bits][self.randomGenerator.binomialvariate(bits,self.bitToggleRate)]
+            # We aggregate the new hex char first instead of mask because we don't want the resulting int value to get out of bounds.
+            mask = self.randomGenerator.choice(hex_value_choices) + mask
+        return int(xorHexStrings([hex(int_value),mask]),16)
+    
+
+    # TODO resolve whatever is going on in here.
+    def __fuzzBytesNAS5G(self, element) -> bytes:
+        if type(element._val)!=bytes:
+            logger.warning(f"Element {element._name} is of type int but has value of type {type(element._val)}.")
+            return element._val
+        elif type(element._bl) != int or element._bl < 4:
+            logger.warning(f"Element {element._name} is in PDU but has bit length < 4. Bit length >=8 expected.")
+            return element._val
+        hex_output = self.__fuzzRawData(element._val.hex())
+        return bytes.fromhex(hex_output)
+
+
+    
+    def __fuzzIntegersNGAP(self, element) -> int:
         int_value = element._val
         lb = element._const_val.lb
         ub = element._const_val.ub
@@ -246,7 +319,7 @@ class DumbFuzzingEngine(FuzzerEngine):
             hex_value_choices = hw_hexvalues[4][self.randomGenerator.binomialvariate(4,self.bitToggleRate)]
             mask += self.randomGenerator.choice(hex_value_choices)
             bits-=4
-        if bits != 0:
+        if bits > 0:
             hex_value_choices = hw_hexvalues[bits][self.randomGenerator.binomialvariate(bits,self.bitToggleRate)]
             # We aggregate the new hex char first instead of mask because we don't want the resulting int value to get out of bounds.
             mask = self.randomGenerator.choice(hex_value_choices) + mask
@@ -255,7 +328,7 @@ class DumbFuzzingEngine(FuzzerEngine):
     # Bitstrings are 2-tuple. Index 0 is the value, index 1 is the length in bits of the value.
     # For example, (x,y) would indicate that the value x is represented over y bits.
     # If r = y%8, then x is padded by r bits on its LSBs.
-    def __fuzzBitString(self, bitstring_element):
+    def __fuzzBitStringNGAP(self, bitstring_element):
         value = bitstring_element._val[0]
         bits = bitstring_element._val[1]
         mask = ""
@@ -269,7 +342,7 @@ class DumbFuzzingEngine(FuzzerEngine):
             mask = self.randomGenerator.choice(hex_value_choices) + mask
         return (int(xorHexStrings([hex(value),mask]),16), bitstring_element._val[1])
     
-    def __fuzzEnumerated(self, element):
+    def __fuzzEnumeratedNGAP(self, element):
         choices = element._cont_rev
         flag_fuzz = (self.randomGenerator.randint(0,100) < int(self.bitToggleRate)*100)
         if flag_fuzz:
@@ -277,7 +350,7 @@ class DumbFuzzingEngine(FuzzerEngine):
         else:
             return element._val
         
-    def __fuzzOctetString(self, element):
+    def __fuzzOctetStringNGAP(self, element):
         hex_output = self.__fuzzRawData(element._val.hex())
         return bytes.fromhex(hex_output)
 
